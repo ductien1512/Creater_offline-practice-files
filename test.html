@@ -1,33 +1,90 @@
-{
- "time": "2026-11-27T12:59:41.245Z",
- "results": {
-  "Môi trường": {
-   "ok": null,
-   "detail": "http: | http://localhost:2435/storage/emulated/0/ctest.html | secure=true | Mozilla/5.0 (Linux; Android 12; CPH2065 Build/SP1A.210812.016; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/157.0.8103.50 Mobile Safari/537.36"
-  },
-  "localStorage": {
-   "ok": true,
-   "detail": "ghi/đọc lại được; số lần mở đã lưu: 1 (chưa có dữ liệu cũ)"
-  },
-  "Mạng": {
-   "ok": null,
-   "detail": "đang online"
-  },
-  "Lưu bền vững": {
-   "ok": null,
-   "detail": "persisted=false"
-  },
-  "IndexedDB": {
-   "ok": true,
-   "detail": "ghi được; số lần mở đã lưu: 1 (chưa có dữ liệu cũ)"
-  },
-  "Tải offilexam-test.txt": {
-   "ok": null,
-   "detail": "đã gọi tải; kiểm tra file có xuất hiện trong thư mục Tải xuống không"
-  },
-  "Tải offilexam-phase0.html": {
-   "ok": null,
-   "detail": "đã gọi tải; kiểm tra file có xuất hiện trong thư mục Tải xuống không"
-  }
- }
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Offilexam – Thử nghiệm GĐ0</title>
+<style>
+body{font:16px/1.5 system-ui,sans-serif;margin:0;padding:16px;max-width:640px;margin-inline:auto}
+h1{font-size:20px}
+.row{border:1px solid #8884;border-radius:8px;padding:10px 12px;margin:10px 0;word-break:break-word}
+.k{font-weight:600}
+.ok{color:#0a7d2c}.bad{color:#c62828}
+button{font:inherit;padding:10px 14px;margin:4px 4px 4px 0}
+textarea{width:100%;height:160px;font:12px monospace}
+</style>
+</head>
+<body>
+<h1>Offilexam – Thử nghiệm Giai đoạn 0</h1>
+<div id="out"></div>
+<p>
+<button id="bDl">Tải file thử (Blob)</button>
+<button id="bSelf">Tải bản offline của trang này</button>
+<button id="bRep">Tạo báo cáo</button>
+</p>
+<textarea id="rep" readonly></textarea>
+<script>
+(function(){
+var SRC='<!doctype html>\n'+document.documentElement.outerHTML;
+var R={},out=document.getElementById('out');
+function show(k,ok,d){
+  R[k]={ok:ok,detail:d};
+  var id='r_'+k.replace(/\W/g,'_'),r=document.getElementById(id);
+  if(!r){r=document.createElement('div');r.className='row';r.id=id;out.appendChild(r);}
+  r.innerHTML='';
+  var s=document.createElement('span');s.className='k';s.textContent=k+': ';
+  var t=document.createElement('span');
+  t.className=ok===true?'ok':ok===false?'bad':'';
+  t.textContent=(ok===true?'ĐẠT':ok===false?'LỖI':'THÔNG TIN')+' — '+d;
+  r.appendChild(s);r.appendChild(t);
 }
+show('Môi trường',null,[location.protocol,location.href.slice(0,90),'secure='+window.isSecureContext,navigator.userAgent].join(' | '));
+
+try{
+  var prev=localStorage.getItem('offx_runs');
+  var n=(parseInt(prev,10)||0)+1;
+  localStorage.setItem('offx_runs',String(n));
+  var back=localStorage.getItem('offx_runs');
+  show('localStorage',back===String(n),'ghi/đọc lại '+(back===String(n)?'được':'không khớp')+'; số lần mở đã lưu: '+n+(prev?' (lần trước: '+prev+')':' (chưa có dữ liệu cũ)'));
+}catch(e){show('localStorage',false,String(e));}
+
+try{
+  var rq=indexedDB.open('offx_test',1);
+  rq.onupgradeneeded=function(){rq.result.createObjectStore('kv');};
+  rq.onerror=function(){show('IndexedDB',false,String(rq.error));};
+  rq.onsuccess=function(){
+    var db=rq.result,tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv'),g=st.get('runs');
+    g.onsuccess=function(){
+      var p=g.result||0;st.put(p+1,'runs');
+      tx.oncomplete=function(){show('IndexedDB',true,'ghi được; số lần mở đã lưu: '+(p+1)+(p?' (lần trước: '+p+')':' (chưa có dữ liệu cũ)'));db.close();};
+    };
+    tx.onerror=function(){show('IndexedDB',false,String(tx.error));};
+  };
+}catch(e){show('IndexedDB',false,String(e));}
+
+if(navigator.storage&&navigator.storage.persisted){
+  navigator.storage.persisted().then(function(p){show('Lưu bền vững',null,'persisted='+p);}).catch(function(e){show('Lưu bền vững',null,String(e));});
+}else{show('Lưu bền vững',null,'không hỗ trợ');}
+
+function net(){show('Mạng',null,navigator.onLine?'đang online':'đang offline');}
+addEventListener('online',net);addEventListener('offline',net);net();
+
+function dl(name,text,type){
+  try{
+    var b=new Blob([text],{type:type||'text/plain'}),u=URL.createObjectURL(b),a=document.createElement('a');
+    a.href=u;a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(u);a.remove();},1500);
+    show('Tải '+name,null,'đã gọi tải; kiểm tra file có xuất hiện trong thư mục Tải xuống không');
+  }catch(e){show('Tải '+name,false,String(e));}
+}
+document.getElementById('bDl').onclick=function(){dl('offilexam-test.txt','Offilexam test '+new Date().toISOString());};
+document.getElementById('bSelf').onclick=function(){dl('offilexam-phase0.html',SRC,'text/html');};
+document.getElementById('bRep').onclick=function(){
+  var t=JSON.stringify({time:new Date().toISOString(),results:R},null,1),ta=document.getElementById('rep');
+  ta.value=t;ta.select();
+  try{navigator.clipboard.writeText(t);}catch(e){}
+};
+})();
+</script>
+</body>
+</html>
